@@ -35,7 +35,7 @@ module DEVStone
     end
 
     def run_for(time = 1.0)
-      proc01(time)
+      proc01(time) unless time.zero?
     end
 
     def proc01(time)
@@ -44,7 +44,7 @@ module DEVStone
       string1 = "DHRYSTONE PROGRAM, 1'ST STRING"
       Dhrystone.array2_glob[8][7] = 10
 
-      start_time = Process.clock_gettime(Process::CLOCK_MONOTONIC)
+      start_time = Time.now
       bench_time = start_time
 
       begin
@@ -73,23 +73,23 @@ module DEVStone
         int2 = 7 * (int3 - int2) - int1
         int1 = proc2(int1)
 
-        bench_time = Process.clock_gettime(Process::CLOCK_MONOTONIC) - start_time
+        bench_time = Time.now - start_time
       end until bench_time >= time
 
       bench_time
     end
 
     def proc0(n)
-      start_time = Process.clock_gettime(Process::CLOCK_MONOTONIC)
+      start_time = Time.now
       n.times {}
-      null_time = Process.clock_gettime(Process::CLOCK_MONOTONIC) - start_time
+      null_time = Time.now - start_time
 
       Dhrystone.ptr_glob_next = Record.new
       Dhrystone.ptr_glob = Record.new(Dhrystone.ptr_glob_next, IDENT2, IDENT3, 40, 'DHRYSTONE PROGRAM, SOME STRING')
       string1 = "DHRYSTONE PROGRAM, 1'ST STRING"
       Dhrystone.array2_glob[8][7] = 10
 
-      start_time = Process.clock_gettime(Process::CLOCK_MONOTONIC)
+      start_time = Time.now
 
       n.times do
         proc5
@@ -118,7 +118,7 @@ module DEVStone
         int1 = proc2(int1)
       end
 
-      bench_time = Process.clock_gettime(Process::CLOCK_MONOTONIC) - start_time - null_time
+      bench_time = Time.now - start_time - null_time
 
       loops_per_bench = if bench_time.zero?
                           0.0

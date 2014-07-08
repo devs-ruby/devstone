@@ -26,22 +26,22 @@ module DEVStone
       @atomic_models_count = 0
     end
 
-    def simulate(formalism)
-      results = DEVS.simulate(formalism, :yield) do |sb|
+    def build(formalism)
+      simulation = DEVS.build(formalism, :yield) do |sb|
         sb.maintain_hierarchy! if @maintain_hierarchy
         sb.generate_graph! if @generate_graph
 
         sb.duration DEVS::INFINITY
         sb.add_model DEVS::Models::Generators::SequenceGenerator, with_args: [0, 1, 1], name: :gen
-        sb.add_model DEVS::Models::Collectors::DatasetCollector, :name => :dataset
+        sb.add_model DEVS::Models::Collectors::HashCollector, :name => :col
         sb.add_coupled_model do |cmb|
           cmb.name "cm_0"
           build_modeling_tree(cmb, 0)
         end
         sb.plug 'gen@value', with: 'cm_0@in1'
         sb.plug 'gen@value', with: 'cm_0@in2' if @type == :ho || @type == :homod
-        sb.plug 'cm_0@out1', with: 'dataset@out1'
-        sb.plug 'cm_0@out2', with: 'dataset@out2' if @type == :ho || @type == :homod
+        sb.plug 'cm_0@out1', with: 'col@out1'
+        sb.plug 'cm_0@out2', with: 'col@out2' if @type == :ho || @type == :homod
       end
     end
 
