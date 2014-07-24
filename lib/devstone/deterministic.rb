@@ -1,5 +1,5 @@
 module DEVStone
-  class AtomicModel < DEVS::AtomicModel
+  class DeterministicAM < DEVS::AtomicModel
     def initialize(int_time, ext_time)
       super()
       @int_time = int_time

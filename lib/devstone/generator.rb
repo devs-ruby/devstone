@@ -10,86 +10,115 @@ module DEVStone
         type: :ho,
         internal_transition_time: 0.1,
         external_transition_time: 0.2,
+        collide: true,
         maintain_hierarchy: false,
         generate_graph: false
       }.merge(opts)
+      @opts = opts
 
+      @model_class = opts[:collide] ? DeterministicAM : StochasticAM
       @width = opts[:width]
       @depth = opts[:depth]
       @type = opts[:type]
-      @internal_transition_time = opts[:internal_transition_time]
-      @external_transition_time = opts[:external_transition_time]
-      @maintain_hierarchy = opts[:maintain_hierarchy]
-      @generate_graph = opts[:generate_graph]
+      @int_time = opts[:internal_transition_time]
+      @ext_time = opts[:external_transition_time]
 
       @coupled_models_count = 0
       @atomic_models_count = 0
     end
 
     def build(formalism)
-      simulation = DEVS.build(formalism, :yield) do |sb|
-        sb.maintain_hierarchy! if @maintain_hierarchy
-        sb.generate_graph! if @generate_graph
-
-        sb.duration DEVS::INFINITY
-        sb.add_model DEVS::Models::Generators::SequenceGenerator, with_args: [0, 1, 1], name: :gen
-        sb.add_model DEVS::Models::Collectors::HashCollector, :name => :col
-        sb.add_coupled_model do |cmb|
-          cmb.name "cm_0"
-          build_modeling_tree(cmb, 0)
-        end
-        sb.plug 'gen@value', with: 'cm_0@in1'
-        sb.plug 'gen@value', with: 'cm_0@in2' if @type == :ho || @type == :homod
-        sb.plug 'cm_0@out1', with: 'col@out1'
-        sb.plug 'cm_0@out2', with: 'col@out2' if @type == :ho || @type == :homod
+      sb = DEVS::SimulationBuilder.new(@opts)
+      sb.duration DEVS::INFINITY
+      gen = sb.add_model DEVS::Models::Generators::SequenceGenerator, with_args: [0, 1, 1], name: :gen
+      gen.add_output_port :value
+      col = sb.add_model DEVS::Models::Collectors::HashCollector, :name => :col
+      col.add_input_port :out1
+      col.add_input_port :out2 if @type == :ho || @type == :homod
+      cmb = sb.add_coupled_model
+      cmb.name 'cm_0'
+      cmb.add_input_port :in1
+      cmb.add_output_port :out1
+      if @type == :ho || @type == :homod
+        cmb.add_input_port :in2
+        cmb.add_output_port :out2
       end
+      build_modeling_tree(cmb, 0)
+      sb.plug 'gen@value', with: 'cm_0@in1'
+      sb.plug 'cm_0@out1', with: 'col@out1'
+      if @type == :ho || @type == :homod
+        sb.plug 'gen@value', with: 'cm_0@in2'
+        sb.plug 'cm_0@out2', with: 'col@out2'
+      end
+      sb.build
     end
 
-    def build_modeling_tree(parent_builder, level=0)
+    def build_modeling_tree(pb, level=0)
       case level
       when @depth - 1 # deepest level
-        parent_builder.add_model DEVStone::AtomicModel, name: "am_l#{level}n1".to_sym, with_args: [@internal_transition_time, @external_transition_time]
-        parent_builder.plug_input_port :in1, with_child: "am_l#{level}n1@in1"
-        parent_builder.plug_output_port :out1, with_child: "am_l#{level}n1@out1"
+        ab = pb.add_model @model_class, name: "am_l#{level}n1".to_sym, with_args: [@int_time, @ext_time]
+        ab.add_input_port :in1
+        ab.add_output_port :out1
+        pb.plug_input_port :in1, with_child: "am_l#{level}n1@in1"
+        pb.plug_output_port :out1, with_child: "am_l#{level}n1@out1"
 
         if @type == :ho || @type == :homod
-          parent_builder.plug_input_port :in2, with_child: "am_l#{level}n1@in2"
-          parent_builder.plug_output_port :out2, with_child: "am_l#{level}n1@out2"
+          ab.add_input_port :in2
+          ab.add_output_port :out2
+          pb.plug_input_port :in2, with_child: "am_l#{level}n1@in2"
+          pb.plug_output_port :out2, with_child: "am_l#{level}n1@out2"
         end
-      else # upper levels
-        (@width - 1).times { |i|
-          parent_builder.add_model(DEVStone::AtomicModel, name: "am_l#{level}n#{i+1}".to_sym, with_args: [@internal_transition_time, @external_transition_time])
-        }
-
-        if @type == :homod
-          @width.times { |i|
-            parent_builder.add_model(DEVStone::AtomicModel, name: "am_l#{level}n#{i+1}")
-          }
+      else            # upper levels
+        # add models
+        i = 0
+        while i < @width-1
+          ab = pb.add_model(@model_class, name: "am_l#{level}n#{i+1}".to_sym, with_args: [@int_time, @ext_time])
+          ab.add_input_port :in1
+          if @type == :hi || @type == :ho
+            ab.add_output_port :out1
+          end
+          if @type == :ho
+            ab.add_input_port :in2
+            ab.add_output_port :out2
+          end
+          i+=1
         end
-
-        parent_builder.add_coupled_model do |builder|
-          builder.name "cm_#{level + 1}"
-          build_modeling_tree(builder, level + 1)
-        end
-
-        (@width - 1).times { |i|
-          parent_builder.plug_input_port :in1, with_child: "am_l#{level}n#{i+1}@in1"
-        }
-
-        if @type == :hi || @type == :ho
-          (@width - 2).times { |i|
-            parent_builder.plug "am_l#{level}n#{i+1}@out1", with: "am_l#{level}n#{i+2}@in1"
-          }
-        end
-
+        # if @type == :homod
+        #   i = 0
+        #   while i < @width
+        #     pb.add_model(@model_class, name: "am_l#{level}n#{i+1}")
+        #     i += 1
+        #   end
+        # end
+        b = pb.add_coupled_model
+        b.name "cm_#{level + 1}"
+        b.add_input_port :in1
+        b.add_output_port :out1
         if @type == :ho
-          parent_builder.plug_input_port :in2, with_child: "am_l#{level}n1@in2"
-          parent_builder.plug_output_port :out2, with_child: "am_l#{level}n1@out2"
-          parent_builder.plug_input_port :in2, with_child: "cm_#{level + 1}@in2"
+          b.add_input_port :in2
         end
+        build_modeling_tree(b, level + 1)
 
-        parent_builder.plug_input_port :in1, with_child: "cm_#{level + 1}@in1"
-        parent_builder.plug_output_port :out1, with_child: "cm_#{level + 1}@out1"
+        # add couplings
+        i = 0
+        while i < @width-1
+          pb.plug_input_port :in1, with_child: "am_l#{level}n#{i+1}@in1"
+          i+=1
+        end
+        if @type == :hi || @type == :ho
+          i = 0
+          while i < @width-2
+            pb.plug "am_l#{level}n#{i+1}@out1", with: "am_l#{level}n#{i+2}@in1"
+            i+=1
+          end
+        end
+        if @type == :ho
+          pb.plug_input_port :in2, with_child: "am_l#{level}n1@in2"
+          pb.plug_output_port :out2, with_child: "am_l#{level}n1@out2"
+          pb.plug_input_port :in2, with_child: "cm_#{level + 1}@in2"
+        end
+        pb.plug_input_port :in1, with_child: "cm_#{level + 1}@in1"
+        pb.plug_output_port :out1, with_child: "cm_#{level + 1}@out1"
       end
     end
     private :build_modeling_tree

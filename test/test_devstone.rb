@@ -17,6 +17,7 @@ class TestDEVStone < MiniTest::Test
       depth: 2,
       width: 3,
       type: :hi,
+      collide: true
       maintain_hierarchy: false,
       generate_graph: false
     }

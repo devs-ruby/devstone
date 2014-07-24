@@ -3,7 +3,8 @@ require 'devs/models'
 
 require 'devstone/version'
 require 'devstone/dhrystone'
-require 'devstone/atomic_model'
+require 'devstone/deterministic'
+require 'devstone/stochastic'
 require 'devstone/generator'
 
 module DEVStone
