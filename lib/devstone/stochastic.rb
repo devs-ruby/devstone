@@ -1,16 +1,18 @@
 module DEVStone
   class StochasticAM < DEVS::AtomicModel
-    def initialize(int_time, ext_time)
+    def initialize(int_time, ext_time, max = nil, min = 0)
       super()
       @int_time = int_time
       @ext_time = ext_time
+      @max = max
+      @min = min
     end
 
     def external_transition(messages)
       @payload = messages.first.payload
       ext_time = @ext_time
       Dhrystone.run_for(ext_time) if ext_time > 0
-      @sigma = rand(100 - 1) + 1 #DEVStone::Random.rand
+      @sigma = @max.nil? ? DEVStone.random.rand : DEVStone.random.rand(@max - @min) + @min #DEVStone::Random.rand
     end
 
     def internal_transition

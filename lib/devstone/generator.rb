@@ -1,7 +1,6 @@
 module DEVStone
   class Generator
-    attr_reader :width, :depth, :type, :internal_transition_time,
-                :external_transition_time
+    attr_reader :width, :depth, :type
 
     def initialize(opts={})
       opts = {
@@ -11,17 +10,24 @@ module DEVStone
         internal_transition_time: 0.1,
         external_transition_time: 0.2,
         collide: true,
-        maintain_hierarchy: false,
-        generate_graph: false
+        number_of_events: 1
       }.merge(opts)
       @opts = opts
 
-      @model_class = opts[:collide] ? DeterministicAM : StochasticAM
+      @model_class, @model_args = if opts[:collide]
+        [DeterministicAM, [opts[:internal_transition_time], opts[:external_transition_time]]]
+      else
+        DEVStone.random = Random.new(opts[:rand_seed] || Random.new_seed)
+        args = [opts[:internal_transition_time], opts[:external_transition_time]]
+        args << opts[:rand_max] if opts.has_key?(:rand_max)
+        args << opts[:rand_min] if opts.has_key?(:rand_min)
+        [StochasticAM, args]
+      end
+
       @width = opts[:width]
       @depth = opts[:depth]
       @type = opts[:type]
-      @int_time = opts[:internal_transition_time]
-      @ext_time = opts[:external_transition_time]
+      @events = opts[:number_of_events]
 
       @coupled_models_count = 0
       @atomic_models_count = 0
@@ -30,8 +36,7 @@ module DEVStone
     def build(formalism)
       sb = DEVS::SimulationBuilder.new(@opts)
       sb.duration DEVS::INFINITY
-      gen = sb.add_model DEVS::Models::Generators::SequenceGenerator, with_args: [0, 1, 1], name: :gen
-      gen.add_output_port :value
+      sb.add_model DEVS::Models::Generators::SequenceGenerator, with_args: [0, @events, 1], name: :gen
       col = sb.add_model DEVS::Models::Collectors::HashCollector, :name => :col
       col.add_input_port :out1
       col.add_input_port :out2 if @type == :ho || @type == :homod
@@ -56,7 +61,7 @@ module DEVStone
     def build_modeling_tree(pb, level=0)
       case level
       when @depth - 1 # deepest level
-        ab = pb.add_model @model_class, name: "am_l#{level}n1".to_sym, with_args: [@int_time, @ext_time]
+        ab = pb.add_model @model_class, name: "am_l#{level}n1".to_sym, with_args: @model_args
         ab.add_input_port :in1
         ab.add_output_port :out1
         pb.plug_input_port :in1, with_child: "am_l#{level}n1@in1"
@@ -72,7 +77,7 @@ module DEVStone
         # add models
         i = 0
         while i < @width-1
-          ab = pb.add_model(@model_class, name: "am_l#{level}n#{i+1}".to_sym, with_args: [@int_time, @ext_time])
+          ab = pb.add_model(@model_class, name: "am_l#{level}n#{i+1}".to_sym, with_args: @model_args)
           ab.add_input_port :in1
           if @type == :hi || @type == :ho
             ab.add_output_port :out1
