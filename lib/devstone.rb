@@ -8,6 +8,11 @@ require 'devstone/stochastic'
 require 'devstone/generator'
 
 module DEVStone
+  class << self
+    attr_accessor :random
+  end
+  @random = Random.new
+
   def generate(formalism, opts={})
     Generator.new(opts).build(formalism)
   end
